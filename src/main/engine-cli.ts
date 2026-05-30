@@ -1,86 +1,89 @@
-import { exec } from 'child_process';
 import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 import { PrintJob, PrinterStatusResult } from '../types';
+import { run, runPwsh, runWithInput, createTempFile } from './util';
 
-function createTempFile(content: string | Buffer, extension: string): string {
-  const tempDir = os.tmpdir();
-  const fileName = `elec_prnt_${Date.now()}_${Math.floor(Math.random() * 1000)}.${extension}`;
-  const filePath = path.join(tempDir, fileName);
-  
-  if (typeof content === 'string' && content.startsWith('data:image')) {
-    const base64Data = content.replace(/^data:image\/\w+;base64,/, "");
-    fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
-  } else {
-    fs.writeFileSync(filePath, content);
+// PowerShell scripts are CONSTANTS with no interpolation. Every user value is
+// read at runtime via $env:EUP_* — environment values are inert string data
+// and are never parsed as PowerShell/shell code, so injection is impossible.
+const PS_PRINT_FILE =
+  "$ErrorActionPreference='Stop'; " +
+  'Start-Process -FilePath $env:EUP_FILE -Verb PrintTo -ArgumentList $env:EUP_NAME -WindowStyle Hidden -Wait';
+
+const PS_PRINT_RAW =
+  "$ErrorActionPreference='Stop'; Out-Printer -Name $env:EUP_NAME -InputObject $env:EUP_DATA";
+
+const PS_STATUS =
+  "$ErrorActionPreference='SilentlyContinue'; " +
+  'Get-CimInstance Win32_Printer -Filter ("Name=\'" + ($env:EUP_NAME -replace "\'","\'\'") + "\'") | ' +
+  'Select-Object PrinterStatus,DetectedErrorState,WorkOffline | ConvertTo-Json -Compress';
+
+function isWindows(): boolean {
+  return process.platform === 'win32';
+}
+
+export async function execCliPrint(job: PrintJob, printerName: string): Promise<boolean> {
+  if (job.type === 'raw') {
+    const raw = job.data.toString();
+    if (isWindows()) {
+      await runPwsh(PS_PRINT_RAW, { EUP_NAME: printerName, EUP_DATA: raw });
+    } else {
+      await runWithInput('lp', ['-d', printerName, '-o', 'raw'], job.data);
+    }
+    return true;
   }
-  return filePath;
+
+  // Materialize html/image/pdf to a file. Existing PDF paths print in place.
+  let filePath = '';
+  let isTemp = true;
+  if (job.type === 'pdf' && fs.existsSync(job.data.toString())) {
+    filePath = job.data.toString();
+    isTemp = false;
+  } else {
+    const ext = job.type === 'image' ? 'jpg' : job.type === 'pdf' ? 'pdf' : 'html';
+    filePath = createTempFile(job.data, ext);
+  }
+
+  try {
+    if (isWindows()) {
+      await runPwsh(PS_PRINT_FILE, { EUP_NAME: printerName, EUP_FILE: filePath });
+    } else {
+      // '--' stops option parsing so a filePath starting with '-' is treated as a path.
+      await run('lp', ['-d', printerName, '--', filePath]);
+    }
+    return true;
+  } finally {
+    if (isTemp) {
+      fs.promises.unlink(filePath).catch(() => { /* already gone */ });
+    }
+  }
 }
 
-export function execCliPrint(job: PrintJob, printerName: string): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    const isWindows = process.platform === 'win32';
-    let filePath = '';
-
+export async function getPrinterStatus(printerName: string): Promise<PrinterStatusResult> {
+  if (isWindows()) {
     try {
-      if (job.type === 'image') filePath = createTempFile(job.data, 'jpg');
-      else if (job.type === 'pdf') {
-        filePath = fs.existsSync(job.data.toString()) ? job.data.toString() : createTempFile(job.data, 'pdf');
-      } else if (job.type === 'html') filePath = createTempFile(job.data, 'html');
-    } catch (err) {
-      return reject(new Error(`Gagal menyiapkan file cetak: ${err}`));
-    }
-
-    if (isWindows) {
-      let command = '';
-      if (job.type === 'raw') {
-        const cleanRaw = job.data.toString().replace(/"/g, '`"');
-        command = `powershell -Command "Out-Printer -Name \\"${printerName}\\" -InputObject \\"${cleanRaw}\\""`;
-      } else {
-        command = `powershell -Command "Start-Process -FilePath \\"${filePath}\\" -ArgumentList \\"/p\\", \\"${printerName}\\" -WindowStyle Hidden -ErrorAction Stop"`;
+      const out = await runPwsh(PS_STATUS, { EUP_NAME: printerName });
+      if (!out.trim()) return 'UNKNOWN';
+      const info = JSON.parse(out);
+      if (info.WorkOffline === true) return 'OFFLINE';
+      if (typeof info.DetectedErrorState === 'number' && info.DetectedErrorState > 2) return 'ERROR';
+      switch (info.PrinterStatus) {
+        case 3: return 'READY';
+        case 4: case 5: return 'PRINTING';
+        case 7: return 'OFFLINE';
+        default: return 'UNKNOWN';
       }
-
-      exec(command, (error) => {
-        setTimeout(() => { 
-          if (job.type !== 'pdf' || !fs.existsSync(job.data.toString())) {
-            if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-          }
-        }, 5000);
-
-        if (error) return reject(new Error(`PowerShell Error: ${error.message}`));
-        resolve(true);
-      });
-    } else {
-      let command = job.type === 'raw' ? `echo "${job.data}" | lp -d "${printerName}" -o raw` : `lp -d "${printerName}" "${filePath}"`;
-      exec(command, (error) => {
-        if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-        if (error) return reject(new Error(`CUPS Error: ${error.message}`));
-        resolve(true);
-      });
+    } catch {
+      return 'UNKNOWN';
     }
-  });
-}
+  }
 
-export function getPrinterStatus(printerName: string): Promise<PrinterStatusResult> {
-  return new Promise((resolve) => {
-    if (process.platform === 'win32') {
-      const cmd = `powershell -Command "Get-CimInstance Win32_Printer -Filter \\"Name='${printerName}'\\" | Select-Object PrinterStatus, DetectedErrorState, WorkOffline"`;
-      exec(cmd, (err, stdout) => {
-        if (err || !stdout.trim()) return resolve('UNKNOWN');
-        if (stdout.includes('True')) return resolve('OFFLINE');
-        if (stdout.includes('3')) return resolve('READY');
-        if (stdout.includes('4')) return resolve('PRINTING');
-        return resolve('READY');
-      });
-    } else {
-      exec(`lpstat -p "${printerName}"`, (err, stdout) => {
-        if (err) return resolve('OFFLINE');
-        if (stdout.includes('is idle')) return resolve('READY');
-        if (stdout.includes('is processing')) return resolve('PRINTING');
-        if (stdout.includes('disabled')) return resolve('ERROR');
-        return resolve('UNKNOWN');
-      });
-    }
-  });
+  try {
+    const out = await run('lpstat', ['-p', printerName]);
+    if (out.includes('is idle')) return 'READY';
+    if (out.includes('is processing') || out.includes('now printing')) return 'PRINTING';
+    if (out.includes('disabled')) return 'ERROR';
+    return 'UNKNOWN';
+  } catch {
+    return 'OFFLINE';
+  }
 }

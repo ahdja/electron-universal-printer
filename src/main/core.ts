@@ -1,36 +1,45 @@
-import { exec } from 'child_process';
-import { PrintJob, PrinterConfig } from '../types';
+import { PrintJob, PrinterConfig, OSPrinter } from '../types';
 import { handleHotfolderPrint } from './hotfolder';
 import { execCliPrint } from './engine-cli';
+import { run } from './util';
 
-export function getOSPrinters(): Promise<any[]> {
-  return new Promise((resolve) => {
-    if (process.platform === 'win32') {
-      const cmd = `powershell -Command "Get-CimInstance Win32_Printer | Select-Object Name, IsDefault"`;
-      exec(cmd, (err, stdout) => {
-        if (err) return resolve([]);
-        const lines = stdout.split('\r\n').filter(line => line.trim() !== '');
-        const printers = lines.slice(2).map(line => {
-          const parts = line.trim().split(/\s{2,}/);
-          return { name: parts[0], isDefault: parts[1] === 'True', status: 'READY' };
-        });
-        resolve(printers);
-      });
-    } else {
-      exec('lpstat -p', (err, stdout) => {
-        if (err) return resolve([]);
-        const printers = stdout.split('\n')
-          .filter(line => line.startsWith('printer'))
-          .map(line => ({ name: line.split(' ')[1], isDefault: false, status: 'READY' }));
-        resolve(printers);
-      });
+const PS_LIST = ['-NoProfile', '-NonInteractive', '-Command'];
+const PS_LIST_CMD =
+  'Get-CimInstance Win32_Printer | Select-Object Name,Default | ConvertTo-Json -Compress';
+
+export async function getOSPrinters(): Promise<OSPrinter[]> {
+  if (process.platform === 'win32') {
+    try {
+      const out = await run('powershell', [...PS_LIST, PS_LIST_CMD]);
+      if (!out.trim()) return [];
+      const parsed = JSON.parse(out);
+      const rows = Array.isArray(parsed) ? parsed : [parsed];
+      return rows
+        .filter((r) => r && r.Name)
+        .map((r) => ({ name: String(r.Name), isDefault: r.Default === true, status: 'READY' as const }));
+    } catch {
+      return [];
     }
-  });
+  }
+
+  try {
+    const out = await run('lpstat', ['-p']);
+    return out
+      .split('\n')
+      .filter((line) => line.startsWith('printer'))
+      .map((line) => {
+        const name = line.split(/\s+/)[1] || '';
+        return { name, isDefault: false, status: 'READY' as const };
+      })
+      .filter((p) => p.name);
+  } catch {
+    return [];
+  }
 }
 
 export async function handlePrintJob(config: PrinterConfig, job: PrintJob): Promise<boolean> {
-  if (config.type === 'hotfolder' || job.printerId === 'HOTFOLDER') {
-    return await handleHotfolderPrint(job);
+  if (config.type === 'hotfolder') {
+    return await handleHotfolderPrint(config, job);
   }
   const targetPrinterName = config.name || job.printerId;
   return await execCliPrint(job, targetPrinterName);
