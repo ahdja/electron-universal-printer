@@ -2,6 +2,20 @@
   "name": "electron-universal-printer",
   "version": "1.0.0",
   "description": "Universal printer adapter for ElectronJS handling standard drivers and dynamic hotfolders (DNP).",
+  "author": "Arief Hidayat Djauhar <it@volab.id>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ahdja/electron-universal-printer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ahdja/electron-universal-printer/issues"
+  },
+  "homepage": "https://github.com/ahdja/electron-universal-printer#readme",
+  "engines": {
+    "node": ">=16"
+  },
+  "sideEffects": false,
   "main": "dist/main/index.js",
   "module": "dist/main/index.esm.js",
   "types": "dist/types/main/index.d.ts",
@@ -32,7 +46,7 @@
     "build:types": "tsc -p tsconfig.build.json",
     "dev": "rollup -c -w",
     "test:app": "npm run build && electron test-app/main.js",
-    "prepublishOnly": "npm run build"
+    "prepack": "npm run build"
   },
   "keywords": [
     "electron",
@@ -43,8 +57,6 @@
     "powershell",
     "print-queue"
   ],
-  "author": "",
-  "license": "MIT",
   "peerDependencies": {
     "electron": ">=20.0.0"
   },
