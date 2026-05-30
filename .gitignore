@@ -29,3 +29,6 @@ Thumbs.db
 
 # Testing temporary files
 test-app/dist/
+.claude/
+AGENTS.md
+CLAUDE.md
