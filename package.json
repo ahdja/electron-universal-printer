@@ -1,5 +1,5 @@
 {
-  "name": "electron-universal-printer",
+  "name": "@kotaksurat/electron-universal-printer",
   "version": "1.0.0",
   "description": "Universal printer adapter for ElectronJS handling standard drivers and dynamic hotfolders (DNP).",
   "author": "Arief Hidayat Djauhar <it@volab.id>",
@@ -16,6 +16,9 @@
     "node": ">=16"
   },
   "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/main/index.js",
   "module": "dist/main/index.esm.js",
   "types": "dist/types/main/index.d.ts",

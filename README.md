@@ -1,4 +1,4 @@
-# electron-universal-printer
+# @kotaksurat/electron-universal-printer
 
 Universal printer adapter for **ElectronJS**. Handles standard OS drivers (Windows PowerShell, macOS/Linux CUPS) **and** dynamic hotfolders (DNP photo printers) behind one consistent API.
 
@@ -16,7 +16,7 @@ Universal printer adapter for **ElectronJS**. Handles standard OS drivers (Windo
 ## Install
 
 ```bash
-npm install electron-universal-printer
+npm install @kotaksurat/electron-universal-printer
 ```
 
 Build the package (consumers of the published package can skip this — `dist/` ships prebuilt):
@@ -34,9 +34,9 @@ Library has three entry points, one per Electron process layer:
 
 | Import | Process | Role |
 |--------|---------|------|
-| `electron-universal-printer`          | **main**     | `registerElectronPrinter(ipcMain, configs)` — registers IPC handlers, runs the print queue. |
-| `electron-universal-printer/preload`  | **preload**  | `getPrinterPreloadAPI(ipcRenderer)` — safe bridge object to expose via `contextBridge`. |
-| `electron-universal-printer/renderer` | **renderer** | `electronPrinter` — typed wrapper around `window.electronPrinter`. |
+| `@kotaksurat/electron-universal-printer`          | **main**     | `registerElectronPrinter(ipcMain, configs)` — registers IPC handlers, runs the print queue. |
+| `@kotaksurat/electron-universal-printer/preload`  | **preload**  | `getPrinterPreloadAPI(ipcRenderer)` — safe bridge object to expose via `contextBridge`. |
+| `@kotaksurat/electron-universal-printer/renderer` | **renderer** | `electronPrinter` — typed wrapper around `window.electronPrinter`. |
 
 Flow:
 
@@ -55,7 +55,7 @@ renderer (electronPrinter.print)
 
 ```js
 const { app, ipcMain } = require('electron');
-const { registerElectronPrinter } = require('electron-universal-printer');
+const { registerElectronPrinter } = require('@kotaksurat/electron-universal-printer');
 
 app.whenReady().then(() => {
   registerElectronPrinter(ipcMain, [
@@ -72,7 +72,7 @@ Printers not pre-registered are resolved on the fly: a job to `printerId: 'HOTFO
 
 ```js
 const { contextBridge, ipcRenderer } = require('electron');
-const { getPrinterPreloadAPI } = require('electron-universal-printer/preload');
+const { getPrinterPreloadAPI } = require('@kotaksurat/electron-universal-printer/preload');
 
 contextBridge.exposeInMainWorld('electronPrinter', getPrinterPreloadAPI(ipcRenderer));
 ```
@@ -84,7 +84,7 @@ contextBridge.exposeInMainWorld('electronPrinter', getPrinterPreloadAPI(ipcRende
 ### 3. Renderer
 
 ```js
-import electronPrinter from 'electron-universal-printer/renderer';
+import electronPrinter from '@kotaksurat/electron-universal-printer/renderer';
 
 // List OS printers
 const printers = await electronPrinter.getPrinters();
