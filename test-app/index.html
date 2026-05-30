@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Electron Universal Printer</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f5f5f5; }
+    constainer { display: flex; gap: 20px; }
+    .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); flex: 1; }
+    button { padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #0056b3; }
+    select, input { width: 100%; padding: 8px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+  <h1>🖨️ Printer Package Testing</h1>
+  <hr>
+
+  <div class="container" style="display: flex; gap: 20px;">
+    
+    <div class="card">
+      <h3>1. Get OS Printers</h3>
+      <button onclick="loadPrinters()">Refresh List Printer</button>
+      <select id="printerSelect"><option>Klik refresh dulu...</option></select>
+      <div id="queueStatus" style="margin-top: 10px; font-weight: bold; color: green;"></div>
+    </div>
+
+    <div class="card">
+      <h3>2. Test Print Driver (Queue)</h3>
+      <p>Mengirim teks mentah/raw atau simulasi dokumen ke printer driver pilihan.</p>
+      <button onclick="testPrintDriver()">Cetak Struk (RAW)</button>
+    </div>
+
+    <div class="card">
+      <h3>3. Test Hotfolder DNP</h3>
+      <label>Target Hotfolder Path:</label>
+      <input type="text" id="hotfolderPath" value="C:/DNP_Test_Folder">
+      
+      <label>Ukuran Cetak:</label>
+      <select id="paperSize">
+        <option value="4x6">4x6 (Photo Penuh)</option>
+        <option value="2x6">2x6 (Strip Banner)</option>
+      </select>
+
+      <button onclick="testPrintHotfolder()" style="background: #28a745;">Kirim Gambar ke Hotfolder</button>
+    </div>
+
+  </div>
+
+  <script>
+    // Contoh Gambar Base64 Merah Polos Kecil untuk Test Hotfolder
+    const sampleBase64Image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==";
+
+    // 1. Ambil list printer dari OS via Package
+    async function loadPrinters() {
+      const select = document.getElementById('printerSelect');
+      select.innerHTML = '<option>Loading...</option>';
+      
+      try {
+        const printers = await window.electronPrinter.getPrinters();
+        select.innerHTML = '';
+        printers.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.name;
+          opt.textContent = `${p.name} (${p.status || 'READY'})`;
+          select.appendChild(opt);
+        });
+      } catch (err) {
+        alert('Gagal ambil printer: ' + err.message);
+      }
+    }
+
+    // 2. Test Cetak Beruntun untuk Uji Coba Queue Manager
+    async function testPrintDriver() {
+      const printerName = document.getElementById('printerSelect').value;
+      if(!printerName) return alert('Pilih printer dulu!');
+
+      // Kita tembak 3 job sekaligus secara bersamaan untuk ngetes antrean FIFO di backend
+      alert('Mengirim 3 antrean cetak sekaligus. Cek console backend untuk melihat antrean!');
+      
+      for(let i = 1; i <= 3; i++) {
+        window.electronPrinter.print(printerName, {
+          type: 'raw',
+          data: `Testing nota antrean ke-${i}\n\n\n`,
+          options: { engine: 'cli' }
+        }).then(() => {
+          console.log(`Job ${i} sukses dicetak.`);
+        }).catch(err => {
+          console.error(`Job ${i} gagal:`, err);
+        });
+      }
+    }
+
+    // 3. Test Tulis File Dinamis ke Hotfolder
+    async function testPrintHotfolder() {
+      const path = document.getElementById('hotfolderPath').value;
+      const size = document.getElementById('paperSize').value;
+
+      try {
+        // ID dikirim 'HOTFOLDER' karena path ditentukan langsung dari UI
+        const success = await window.electronPrinter.print('HOTFOLDER', {
+          type: 'image',
+          data: sampleBase64Image,
+          options: {
+            size: size,
+            hotfolderPath: path
+          }
+        });
+
+        if(success) {
+          alert(`Berhasil! Cek folder ${path}, harusnya muncul file gambar baru.`);
+        }
+      } catch (err) {
+        alert('Gagal tulis hotfolder: ' + err.message);
+      }
+    }
+  </script>
+</body>
+</html>

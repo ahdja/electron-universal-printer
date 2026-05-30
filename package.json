@@ -1,0 +1,51 @@
+{
+  "name": "electron-universal-printer",
+  "version": "1.0.0",
+  "description": "Universal printer adapter for ElectronJS handling standard drivers and dynamic hotfolders (DNP).",
+  "main": "dist/main/index.js",
+  "module": "dist/main/index.esm.js",
+  "types": "dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/main/index.js",
+      "import": "./dist/main/index.esm.js"
+    },
+    "./preload": {
+      "require": "./dist/preload/index.js",
+      "import": "./dist/preload/index.esm.js"
+    },
+    "./renderer": {
+      "require": "./dist/renderer/index.js",
+      "import": "./dist/renderer/index.esm.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c -w",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "electron",
+    "printer",
+    "hotfolder",
+    "dnp",
+    "esc-pos",
+    "powershell",
+    "print-queue"
+  ],
+  "author": "",
+  "license": "MIT",
+  "peerDependencies": {
+    "electron": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^25.0.0",
+    "@rollup/plugin-node-resolve": "^15.0.0",
+    "@rollup/plugin-typescript": "^11.0.0",
+    "rollup": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
