@@ -10,7 +10,10 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      // Electron >=20 sandboxes preload by default, which blocks require() of
+      // local files like ../dist/preload/index.js. Disable it for this harness.
+      sandbox: false
     }
   });
 

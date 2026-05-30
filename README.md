@@ -78,6 +78,8 @@ contextBridge.exposeInMainWorld('electronPrinter', getPrinterPreloadAPI(ipcRende
 ```
 
 > Requires `contextIsolation: true`, `nodeIntegration: false` (recommended Electron defaults).
+>
+> Because this preload `require()`s the package from `node_modules`, Electron's default sandbox (≥20) will block it with `module not found`. Either set `sandbox: false` in `webPreferences`, or bundle your preload (e.g. with esbuild/Vite) so it needs no runtime `require()`.
 
 ### 3. Renderer
 

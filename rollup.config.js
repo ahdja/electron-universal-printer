@@ -16,11 +16,23 @@ const createConfig = (input, distName) => ({
       sourcemap: true,
     },
   ],
-  external: ['electron', 'fs', 'path', 'os', 'child_process'], // Jangan bundle built-in modules
+  external: ['electron', 'fs', 'path', 'os', 'child_process', 'crypto'], // Jangan bundle built-in modules
   plugins: [
     resolve(),
     commonjs(),
-    typescript({ tsconfig: './tsconfig.json', declaration: true, outDir: `./dist/${distName}` }),
+    typescript({
+      tsconfig: './tsconfig.json',
+      // Emit ES modules so Rollup can inline local imports into a single bundle.
+      // (NodeNext from tsconfig would emit bare require("./core") that Rollup
+      //  leaves unbundled, breaking the published file at runtime.)
+      // Declarations are produced separately via `npm run build:types`.
+      compilerOptions: {
+        module: 'ESNext',
+        moduleResolution: 'Bundler',
+        declaration: false,
+        declarationMap: false,
+      },
+    }),
   ],
 });
 

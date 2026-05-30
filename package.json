@@ -4,17 +4,20 @@
   "description": "Universal printer adapter for ElectronJS handling standard drivers and dynamic hotfolders (DNP).",
   "main": "dist/main/index.js",
   "module": "dist/main/index.esm.js",
-  "types": "dist/types/index.d.ts",
+  "types": "dist/types/main/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/types/main/index.d.ts",
       "require": "./dist/main/index.js",
       "import": "./dist/main/index.esm.js"
     },
     "./preload": {
+      "types": "./dist/types/preload/index.d.ts",
       "require": "./dist/preload/index.js",
       "import": "./dist/preload/index.esm.js"
     },
     "./renderer": {
+      "types": "./dist/types/renderer/index.d.ts",
       "require": "./dist/renderer/index.js",
       "import": "./dist/renderer/index.esm.js"
     }
@@ -25,7 +28,8 @@
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "prebuild": "npm run clean",
-    "build": "rollup -c",
+    "build": "rollup -c && npm run build:types",
+    "build:types": "tsc -p tsconfig.build.json",
     "dev": "rollup -c -w",
     "test:app": "npm run build && electron test-app/main.js",
     "prepublishOnly": "npm run build"
