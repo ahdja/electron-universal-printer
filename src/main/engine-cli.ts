@@ -9,6 +9,23 @@ const PS_PRINT_FILE =
   "$ErrorActionPreference='Stop'; " +
   'Start-Process -FilePath $env:EUP_FILE -Verb PrintTo -ArgumentList $env:EUP_NAME -WindowStyle Hidden -Wait';
 
+// Image print via GDI PrintDocument. Does NOT rely on a PrintTo verb / associated
+// app (which images often lack), so it works on regular and thermal POS printers
+// that expose a Windows driver. Image is scaled to the printable area preserving
+// aspect ratio so it does not stretch on narrow 58/80mm thermal paper.
+const PS_PRINT_IMAGE =
+  "$ErrorActionPreference='Stop'; " +
+  'Add-Type -AssemblyName System.Drawing; ' +
+  '$img = [System.Drawing.Image]::FromFile($env:EUP_FILE); ' +
+  '$pd = New-Object System.Drawing.Printing.PrintDocument; ' +
+  '$pd.PrinterSettings.PrinterName = $env:EUP_NAME; ' +
+  '$pd.add_PrintPage({ param($s,$e) ' +
+  '$area = $e.MarginBounds; ' +
+  '$ratio = [Math]::Min($area.Width / $img.Width, $area.Height / $img.Height); ' +
+  '$w = [int]($img.Width * $ratio); $h = [int]($img.Height * $ratio); ' +
+  '$e.Graphics.DrawImage($img, $area.Left, $area.Top, $w, $h) }); ' +
+  'try { $pd.Print() } finally { $img.Dispose(); $pd.Dispose() }';
+
 const PS_PRINT_RAW =
   "$ErrorActionPreference='Stop'; Out-Printer -Name $env:EUP_NAME -InputObject $env:EUP_DATA";
 
@@ -45,7 +62,8 @@ export async function execCliPrint(job: PrintJob, printerName: string): Promise<
 
   try {
     if (isWindows()) {
-      await runPwsh(PS_PRINT_FILE, { EUP_NAME: printerName, EUP_FILE: filePath });
+      const script = job.type === 'image' ? PS_PRINT_IMAGE : PS_PRINT_FILE;
+      await runPwsh(script, { EUP_NAME: printerName, EUP_FILE: filePath });
     } else {
       // '--' stops option parsing so a filePath starting with '-' is treated as a path.
       await run('lp', ['-d', printerName, '--', filePath]);
